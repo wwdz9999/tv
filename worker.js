@@ -85,12 +85,7 @@ const HTML_TEMPLATE = `
                 <label class="block text-sm font-medium text-gray-400 mb-2">选择采集站点</label>
                 <select id="apiSource" class="w-full bg-[#222] border border-[#333] text-white px-3 py-2 rounded-lg focus:outline-none focus:border-white transition-colors">
                     <option value="heimuer">黑莓影视 (heimuer)</option>
-                    <option value="bfzy">暴风影视 (bfzy)</option>
                     <option value="ffzy">非凡影视 (ffzy)</option>
-                    <option value="kkzy">快看影视 (kkzy)</option>
-                    <option value="lszy">乐视影视 (lszy)</option>
-                    <option value="lzzy">量子影视 (lzzy)</option>
-                    <option value="snzy">索尼影视 (snzy)</option>
                     <option value="custom">自定义接口</option>
                 </select>
             </div>
@@ -325,7 +320,7 @@ const HTML_TEMPLATE = `
                 
                 const resultsDiv = document.getElementById('results');
                 resultsDiv.innerHTML = data.list.map(item => \`
-                    <div class="card-hover bg-[#111] rounded-lg overflow-hidden cursor-pointer p-6 h-fit" onclick="showDetails('\${item.vod_id}')">
+                    <div class="card-hover bg-[#111] rounded-lg overflow-hidden cursor-pointer p-6 h-fit" onclick="showDetails('\${item.vod_id}','\${item.vod_name}')">
                         <h3 class="text-xl font-semibold mb-3">\${item.vod_name}</h3>
                         <p class="text-gray-400 text-sm mb-2">\${item.type_name}</p>
                         <p class="text-gray-400 text-sm">\${item.vod_remarks}</p>
@@ -338,7 +333,7 @@ const HTML_TEMPLATE = `
             }
         }
 
-        async function showDetails(id) {
+        async function showDetails(id,vod_name) {
             showLoading();
             try {
                 const apiParams = currentApiSource === 'custom' 
@@ -352,11 +347,11 @@ const HTML_TEMPLATE = `
                 const modalTitle = document.getElementById('modalTitle');
                 const modalContent = document.getElementById('modalContent');
                 
-                modalTitle.textContent = data.title;
+                modalTitle.textContent = vod_name;
                 modalContent.innerHTML = \`
                     <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
                         \${data.episodes.map((episode, index) => \`
-                            <button onclick="playVideo('\${episode}')" 
+                            <button onclick="playVideo('\${episode}','\${vod_name}')" 
                                     class="px-4 py-2 bg-[#222] hover:bg-[#333] border border-[#333] hover:border-white rounded-lg transition-colors text-center">
                                 第\${index + 1}集
                             </button>
@@ -378,10 +373,17 @@ const HTML_TEMPLATE = `
             document.getElementById('modalContent').innerHTML = '';
         }
 
-        function playVideo(url) {
+        function playVideo(url,vod_name) {
             showLoading();
             const modalContent = document.getElementById('modalContent');
-            const currentHtml = modalContent.innerHTML; // 保存当前的集数列表HTML
+            const currentTitle = modalTitle.textContent.split(' - ')[0];
+            const currentHtml = modalContent.innerHTML;
+            
+            // 从当前点击的按钮获取集数
+            const episodeNumber = event.target.textContent.replace(/[^0-9]/g, '');
+            
+            // 更新标题显示
+            modalTitle.textContent = vod_name + " - 第" + episodeNumber + "集";
             
             // 先移除现有的视频播放器（如果存在）
             const existingPlayer = modalContent.querySelector('.video-player');
@@ -395,7 +397,7 @@ const HTML_TEMPLATE = `
                     <div class="space-y-6">
                         <div class="video-player">
                             <iframe 
-                                src="https://hoplayer.com/index.html?url=\${url}"
+                                src="https://hoplayer.com/index.html?url=\${url}&autoplay=true"
                                 width="100%" 
                                 height="600" 
                                 frameborder="0" 
@@ -416,7 +418,7 @@ const HTML_TEMPLATE = `
                     <div class="space-y-6">
                         <div class="video-player">
                             <iframe 
-                                src="https://hoplayer.com/index.html?url=\${url}"
+                                src="https://hoplayer.com/index.html?url=\${url}&autoplay=true"
                                 width="100%" 
                                 height="600" 
                                 frameborder="0" 
@@ -457,15 +459,15 @@ const HTML_TEMPLATE = `
 const API_SITES = {
     heimuer: {
         api: 'https://json.heimuer.xyz',
-        name: '黑莓影视',
-        detail: 'https://heimuer.tv'
+        name: '黑木耳',
+        detail: 'https://heimuer.tv',
     },
 
     ffzy: {
         api: 'http://ffzy5.tv',
         name: '非凡影视',
-        detail: 'http://ffzy5.tv'
-    }
+        detail: 'http://ffzy5.tv',
+    },
 };
 
 async function handleRequest(request) {
@@ -475,66 +477,79 @@ async function handleRequest(request) {
     if (url.pathname === '/api/search') {
         const searchQuery = url.searchParams.get('wd');
         const source = url.searchParams.get('source') || 'heimuer';
-        
+
         try {
-            const apiUrl = customApi ? customApi : API_SITES[source].api + '/api.php/provide/vod/?ac=list&wd=' + encodeURIComponent(searchQuery);
+            const apiUrl = customApi
+                ? customApi
+                : API_SITES[source].api + '/api.php/provide/vod/?ac=list&wd=' + encodeURIComponent(searchQuery);
             const response = await fetch(apiUrl, {
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                    'Accept': 'application/json'
-                }
+                    'User-Agent':
+                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    Accept: 'application/json',
+                },
             });
             if (!response.ok) {
                 throw new Error('API 请求失败');
             }
             const data = await response.text();
             return new Response(data, {
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                }
+                    'Access-Control-Allow-Origin': '*',
+                },
             });
         } catch (error) {
-            return new Response(JSON.stringify({
-                code: 400,
-                msg: '搜索服务暂时不可用，请稍后再试',
-                list: []
-            }), {
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                }
-            });
+            return new Response(
+                JSON.stringify({
+                    code: 400,
+                    msg: '搜索服务暂时不可用，请稍后再试',
+                    list: [],
+                }),
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*',
+                    },
+                },
+            );
         }
     }
-    
+
     if (url.pathname === '/api/detail') {
         const id = url.searchParams.get('id');
         const source = url.searchParams.get('source') || 'heimuer';
         const customApi = url.searchParams.get('customApi') || '';
-        const detailUrl = `https://r.jina.ai/${customApi ? customApi : API_SITES[source].detail}/index.php/vod/detail/id/${id}.html`
+        const detailUrl = `https://r.jina.ai/${
+            customApi ? customApi : API_SITES[source].detail
+        }/index.php/vod/detail/id/${id}.html`;
         const response = await fetch(detailUrl);
         const html = await response.text();
-        
-        // 使用新的正则表达式匹配带有 $ 分隔符的 m3u8 链接
-        const matches = html.match(/\$https?:\/\/[^"'\s]+?\.m3u8/g) || [];
-        const m3u8Links = matches.map(link => link.substring(1)); // 移除开头的 $
-        
-        // 修改标题提取逻辑
-        let title = html.match(/Title:\s*(.*?)(?:-豪华资源|-.*?资源)?(?:,|$)/)?.[1] || '';
-        
-        return new Response(JSON.stringify({
-            title: title,
-            episodes: m3u8Links,
-            detailUrl: detailUrl
-        }), {
-            headers: { 'Content-Type': 'application/json' }
-        });
+
+        // 更新正则表达式以匹配新的 URL 格式
+        let matches = [];
+        if (source === 'ffzy') {
+            matches = html.match(/(?<=\$)(https?:\/\/[^"'\s]+?\/\d{8}\/\d+_[a-f0-9]+\/index\.m3u8)/g) || [];
+            matches = matches.map(link => link.split('(')[1]);
+        } else {
+            matches = html.match(/\$https?:\/\/[^"'\s]+?\.m3u8/g) || [];
+            matches = matches.map(link => link.substring(1)); // 移除开头的 $
+        }
+
+        return new Response(
+            JSON.stringify({
+                episodes: matches,
+                detailUrl: detailUrl,
+            }),
+            {
+                headers: { 'Content-Type': 'application/json' },
+            },
+        );
     }
-    
+
     // 默认返回 HTML 页面
     return new Response(HTML_TEMPLATE, {
-        headers: { 'Content-Type': 'text/html' }
+        headers: { 'Content-Type': 'text/html' },
     });
 }
 
